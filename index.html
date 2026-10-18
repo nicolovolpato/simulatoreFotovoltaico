@@ -46,6 +46,16 @@
     -webkit-mask-image:radial-gradient(ellipse 90% 70% at 50% 0%, #000 20%, transparent 75%);
     mask-image:radial-gradient(ellipse 90% 70% at 50% 0%, #000 20%, transparent 75%);
   }
+  /* texture: spettro elettromagnetico — banda continua + righe spettrali sottili */
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.09;
+    background-image:
+      linear-gradient(90deg,
+        #7a3b2e 0%, #b2603a 14%, #c9a23c 28%, #c9c23c 42%,
+        #8fbf4e 56%, #4fbf8b 70%, #3f7db2 84%, #5a4fb2 100%);
+    -webkit-mask-image:linear-gradient(180deg, #000 0%, rgba(0,0,0,.75) 55%, transparent 100%);
+    mask-image:linear-gradient(180deg, #000 0%, rgba(0,0,0,.75) 55%, transparent 100%);
+  }
   .wrap{max-width:1180px;margin:0 auto;position:relative;z-index:1}
 
   header{margin-bottom:28px}
@@ -192,9 +202,9 @@
     display:flex;align-items:center;justify-content:center;
     padding:clamp(14px,4vw,40px);
     background:
-      radial-gradient(800px 500px at 50% -10%, rgba(155,203,78,.08), transparent 60%),
-      linear-gradient(180deg,rgba(18,23,19,.90),rgba(18,23,19,.97));
-    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+      radial-gradient(800px 500px at 50% -10%, rgba(155,203,78,.05), transparent 60%),
+      linear-gradient(180deg,rgba(18,23,19,0),rgba(18,23,19,.55));
+    backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
   }
   .overlay.hidden{display:none}
   .onb{
@@ -249,8 +259,8 @@
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;
     padding:clamp(14px,4vw,40px);text-align:center;
     background:
-      radial-gradient(800px 500px at 50% 40%, rgba(155,203,78,.08), transparent 60%),
-      linear-gradient(180deg,var(--bg),var(--bg-2));
+      radial-gradient(800px 500px at 50% 40%, rgba(155,203,78,.05), transparent 60%),
+      linear-gradient(180deg,rgba(22,28,23,0),rgba(25,31,26,.55));
   }
   .loader.hidden{display:none}
   .loader-ring{
