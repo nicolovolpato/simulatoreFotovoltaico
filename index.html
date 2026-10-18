@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulatore Fotovoltaico — Convenienza & Payback</title>
+<style>
+  :root{
+    --lime:#9BCB4E;
+    --lime-deep:#7FA83F;
+    --yellow:#D6C24E;
+    --yellow-deep:#B9A43C;
+    --green:#4FBF8B;
+    --green-deep:#3C9C6F;
+    --grid-red:#C67265;
+    --bg:#161C17;
+    --bg-2:#191F1A;
+    --panel:#1E251F;
+    --panel-2:#1A211B;
+    --line:#2C3830;
+    --line-2:#38473C;
+    --ink:#D2DDCE;
+    --muted:#8A9A8C;
+    --muted-2:#6E7E70;
+    --mono:'SF Mono','JetBrains Mono','Fira Code',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:
+      radial-gradient(900px 460px at 82% -8%, rgba(155,203,78,.06), transparent 62%),
+      radial-gradient(700px 500px at 8% 108%, rgba(79,191,139,.04), transparent 60%),
+      linear-gradient(180deg,var(--bg) 0%, var(--bg-2) 100%);
+    background-attachment:fixed;
+    color:var(--ink);
+    min-height:100vh;
+    padding:clamp(14px,3vw,40px);
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.25;
+    background-image:
+      linear-gradient(rgba(56,71,60,.25) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,71,60,.25) 1px, transparent 1px);
+    background-size:44px 44px;
+    -webkit-mask-image:radial-gradient(ellipse 90% 70% at 50% 0%, #000 20%, transparent 75%);
+    mask-image:radial-gradient(ellipse 90% 70% at 50% 0%, #000 20%, transparent 75%);
+  }
+  .wrap{max-width:1180px;margin:0 auto;position:relative;z-index:1}
+
+  header{margin-bottom:28px}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--lime);font-weight:600;margin-bottom:12px;
+    display:flex;align-items:center;gap:9px;
+  }
+  .eyebrow::before{content:"";width:8px;height:8px;border-radius:2px;background:var(--lime);
+    box-shadow:0 0 6px rgba(155,203,78,.5);animation:pulse 3s infinite}
+  @keyframes pulse{0%,100%{opacity:.9}50%{opacity:.5}}
+  h1{
+    font-size:clamp(26px,4.4vw,46px);line-height:1.02;font-weight:800;
+    color:var(--ink);letter-spacing:-.02em;
+  }
+  h1 .accent{
+    background:linear-gradient(100deg,var(--lime),var(--yellow));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 24px rgba(155,203,78,.12);
+  }
+  .sub{margin-top:14px;color:var(--muted);font-size:15px;max-width:640px;line-height:1.55}
+  .badge-row{margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .badge{
+    font-family:var(--mono);font-size:11.5px;
+    background:var(--panel);border:1px solid var(--line);
+    padding:7px 13px;border-radius:8px;color:var(--muted);font-weight:500;
+    display:flex;align-items:center;gap:7px;
+  }
+  .badge b{color:var(--lime);font-weight:600}
+  .badge-edit{
+    font-family:var(--mono);font-size:11.5px;cursor:pointer;
+    background:transparent;border:1px solid var(--line);
+    padding:7px 13px;border-radius:8px;color:var(--muted);font-weight:500;
+    transition:all .15s;
+  }
+  .badge-edit:hover{border-color:var(--lime);color:var(--lime)}
+
+  .grid-main{display:grid;grid-template-columns:340px 1fr;gap:22px;align-items:start}
+  @media(max-width:880px){.grid-main{grid-template-columns:1fr}}
+
+  .panel{
+    background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 100%);
+    border:1px solid var(--line);border-radius:16px;
+    padding:22px;position:relative;
+    box-shadow:0 20px 40px -24px rgba(0,0,0,.8), inset 0 1px 0 rgba(182,245,0,.04);
+  }
+  .panel h2{
+    font-family:var(--mono);
+    font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    font-weight:600;margin-bottom:18px;display:flex;align-items:center;gap:9px;
+  }
+  .panel h2 .dot{width:6px;height:6px;border-radius:1px;background:var(--lime);
+    box-shadow:0 0 5px rgba(155,203,78,.4)}
+
+  .ctrl{margin-bottom:20px}
+  .ctrl:last-child{margin-bottom:0}
+  .ctrl-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .ctrl-label{font-size:13.5px;font-weight:600;color:var(--ink)}
+  .ctrl-val{font-family:var(--mono);font-size:14.5px;font-weight:700;color:var(--lime);font-variant-numeric:tabular-nums}
+  .ctrl-val small{font-weight:500;color:var(--muted);font-size:11px}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:6px;
+    background:linear-gradient(90deg,var(--lime) 0%,var(--lime) var(--pct,50%),var(--line-2) var(--pct,50%),var(--line-2) 100%);
+    outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:18px;height:18px;border-radius:50%;
+    background:var(--bg);border:2px solid var(--lime);cursor:pointer;
+    box-shadow:0 0 0 3px rgba(155,203,78,.10);transition:transform .08s;
+  }
+  input[type=range]::-webkit-slider-thumb:active{transform:scale(1.18)}
+  input[type=range]::-moz-range-thumb{
+    width:18px;height:18px;border-radius:50%;background:var(--bg);border:2px solid var(--lime);
+    cursor:pointer;box-shadow:0 0 0 3px rgba(155,203,78,.10);
+  }
+  .ctrl-hint{font-size:11.5px;color:var(--muted-2);margin-top:8px;line-height:1.45}
+
+  .divider{height:1px;background:linear-gradient(90deg,transparent,var(--line-2),transparent);margin:20px 0}
+
+  .toggle-row{display:flex;gap:6px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:4px}
+  .toggle-row button{
+    flex:1;border:none;background:transparent;padding:9px 6px;border-radius:7px;
+    font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:all .15s;
+  }
+  .toggle-row button.on{background:var(--lime);color:var(--bg);box-shadow:none}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:13px;margin-bottom:22px}
+  .kpi{
+    border-radius:14px;padding:18px;position:relative;overflow:hidden;
+    border:1px solid var(--line);background:var(--panel-2);
+  }
+  .kpi.hero-kpi{
+    grid-column:1/-1;
+    background:
+      radial-gradient(400px 200px at 88% -30%, rgba(155,203,78,.10), transparent 65%),
+      linear-gradient(135deg,#212A1F 0%,#1A211B 100%);
+    border-color:var(--line-2);padding:24px;
+  }
+  .kpi.hero-kpi::after{
+    content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;
+    background:radial-gradient(circle,rgba(214,194,78,.10),transparent 70%);
+  }
+  .kpi-k{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--muted);margin-bottom:9px}
+  .hero-kpi .kpi-k{color:var(--lime)}
+  .kpi-v{font-family:var(--mono);font-size:clamp(24px,4vw,34px);font-weight:700;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .kpi-v small{font-size:15px;font-weight:500;color:var(--muted)}
+  .hero-kpi .kpi-v{color:#EAF2E6;text-shadow:none}
+  .kpi-note{font-size:11.5px;margin-top:9px;color:var(--muted);line-height:1.4}
+  .hero-kpi .kpi-sub{font-family:var(--mono);font-size:12px;margin-top:11px;color:var(--muted);display:flex;align-items:center;gap:7px}
+  .verdict-pill{
+    display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;padding:5px 11px;border-radius:6px;
+    margin-top:13px;letter-spacing:.03em;
+  }
+
+  .chart-card{margin-top:4px}
+  .chart-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;flex-wrap:wrap;gap:8px}
+  .chart-title{font-size:12.5px;font-weight:600;color:var(--ink)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap}
+  .legend span{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;font-weight:500}
+  .legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
+  svg{width:100%;height:auto;display:block;overflow:visible}
+  .cash-line{fill:none;stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+  .zero-line{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;opacity:.45}
+  .axis-lbl{font-family:var(--mono);font-size:9.5px;fill:var(--muted-2);font-weight:500}
+  .pb-marker{fill:var(--green)}
+
+  .season{margin-top:22px}
+  .season-bars{display:flex;align-items:flex-end;gap:3px;height:130px;margin-top:14px;padding:0 2px}
+  .month{flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%;justify-content:flex-end}
+  .bar-stack{width:100%;max-width:26px;display:flex;flex-direction:column;justify-content:flex-end;height:100%;border-radius:4px 4px 0 0;overflow:hidden;background:var(--panel-2)}
+  .bar-self{background:linear-gradient(180deg,var(--lime),var(--yellow-deep));width:100%;box-shadow:none}
+  .bar-grid{background:var(--grid-red);opacity:.8;width:100%}
+  .m-lbl{font-family:var(--mono);font-size:9.5px;color:var(--muted-2);font-weight:500}
+  .season-note{font-size:11.5px;color:var(--muted);margin-top:14px;line-height:1.5;display:flex;gap:9px;align-items:flex-start}
+  .season-note::before{content:"";flex:none;width:3px;align-self:stretch;background:linear-gradient(180deg,var(--lime),var(--yellow));border-radius:2px}
+
+  .foot{margin-top:26px;font-size:11px;color:var(--muted-2);line-height:1.55;text-align:center;max-width:760px;margin-left:auto;margin-right:auto}
+  .foot b{color:var(--muted)}
+
+  /* ===== ONBOARDING OVERLAY ===== */
+  .overlay{
+    position:fixed;inset:0;z-index:50;
+    display:flex;align-items:center;justify-content:center;
+    padding:clamp(14px,4vw,40px);
+    background:
+      radial-gradient(800px 500px at 50% -10%, rgba(155,203,78,.08), transparent 60%),
+      linear-gradient(180deg,rgba(18,23,19,.90),rgba(18,23,19,.97));
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  }
+  .overlay.hidden{display:none}
+  .onb{
+    width:100%;max-width:460px;
+    background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 100%);
+    border:1px solid var(--line-2);border-radius:18px;
+    padding:clamp(24px,4vw,34px);
+    box-shadow:0 40px 80px -30px rgba(0,0,0,.9);
+    position:relative;
+  }
+  .onb .eyebrow{margin-bottom:14px}
+  .onb h1{font-size:clamp(23px,5vw,30px);margin-bottom:10px}
+  .onb .sub{margin-top:0;margin-bottom:26px;font-size:14px}
+  .field{margin-bottom:20px}
+  .field-label{display:block;font-size:13.5px;font-weight:600;color:var(--ink);margin-bottom:9px}
+  .field-input{
+    display:flex;align-items:center;gap:10px;
+    background:var(--panel-2);border:1px solid var(--line);border-radius:11px;
+    padding:0 14px;transition:border-color .15s;
+  }
+  .field-input:focus-within{border-color:var(--lime)}
+  .field-input input{
+    flex:1;background:transparent;border:none;outline:none;
+    font-family:var(--mono);font-size:20px;font-weight:700;color:var(--ink);
+    padding:14px 0;width:100%;-moz-appearance:textfield;
+  }
+  .field-input input::-webkit-outer-spin-button,
+  .field-input input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+  .field-input input::placeholder{color:var(--muted-2);font-weight:500}
+  .field-unit{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--muted);white-space:nowrap}
+  .field-hint{font-size:11.5px;color:var(--muted-2);margin-top:8px;line-height:1.45}
+  .field-err{font-size:11.5px;color:var(--grid-red);margin-top:8px;line-height:1.45;display:none}
+  .field-err.show{display:block}
+  .onb-btn{
+    width:100%;margin-top:6px;border:none;cursor:pointer;
+    background:linear-gradient(100deg,var(--lime),var(--lime-deep));
+    color:var(--bg);font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.02em;
+    padding:15px;border-radius:12px;transition:filter .15s,transform .08s;
+  }
+  .onb-btn:hover{filter:brightness(1.08)}
+  .onb-btn:active{transform:scale(.99)}
+  .onb-skip{
+    display:block;width:100%;text-align:center;margin-top:14px;
+    background:none;border:none;cursor:pointer;
+    font-family:var(--mono);font-size:11.5px;color:var(--muted-2);
+  }
+  .onb-skip:hover{color:var(--muted)}
+
+  /* ===== LOADER ===== */
+  .loader{
+    position:fixed;inset:0;z-index:60;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:26px;
+    padding:clamp(14px,4vw,40px);text-align:center;
+    background:
+      radial-gradient(800px 500px at 50% 40%, rgba(155,203,78,.08), transparent 60%),
+      linear-gradient(180deg,var(--bg),var(--bg-2));
+  }
+  .loader.hidden{display:none}
+  .loader-ring{
+    width:64px;height:64px;position:relative;
+  }
+  .loader-ring svg{width:64px;height:64px;transform:rotate(-90deg)}
+  .loader-ring .track{fill:none;stroke:var(--line-2);stroke-width:5}
+  .loader-ring .arc{
+    fill:none;stroke:var(--lime);stroke-width:5;stroke-linecap:round;
+    stroke-dasharray:1 1000;
+    animation:fill-arc 3s linear forwards;
+  }
+  @keyframes fill-arc{
+    0%{stroke-dasharray:1 1000}
+    100%{stroke-dasharray:176 1000}
+  }
+  .loader-sun{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:15px;font-weight:700;color:var(--lime);
+  }
+  .loader-txt{
+    font-family:var(--mono);font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--muted);font-weight:600;min-height:16px;
+  }
+  .loader-sub{font-size:13px;color:var(--muted-2);max-width:360px;line-height:1.5;margin-top:-14px}
+</style>
+</head>
+<body>
+
+<!-- ===== ONBOARDING ===== -->
+<div class="overlay" id="overlay">
+  <div class="onb">
+    <div class="eyebrow">Configura la simulazione</div>
+    <h1>Il tuo fotovoltaico<br><span class="accent">conviene davvero?</span></h1>
+    <p class="sub">Inserisci due dati dalla tua bolletta elettrica. Da lì costruisco una prima stima, che poi potrai affinare muovendo tutti i parametri.</p>
+
+    <div class="field">
+      <label class="field-label" for="in-need">Consumo annuo di energia</label>
+      <div class="field-input">
+        <input type="number" id="in-need" inputmode="numeric" placeholder="3500" min="500" max="30000" step="100">
+        <span class="field-unit">kWh / anno</span>
+      </div>
+      <div class="field-hint">Lo trovi in bolletta come "consumo annuo". Una famiglia media sta tra 2.500 e 5.000 kWh.</div>
+    </div>
+
+    <div class="field">
+      <label class="field-label" for="in-price">Costo unitario dell'energia</label>
+      <div class="field-input">
+        <input type="number" id="in-price" inputmode="decimal" placeholder="0,29" min="0.05" max="1" step="0.01">
+        <span class="field-unit">€ / kWh</span>
+      </div>
+      <div class="field-hint">Il prezzo "tutto compreso": spesa totale della bolletta diviso i kWh consumati. In genere 0,25–0,35 €/kWh.</div>
+      <div class="field-err" id="onb-err">Controlla i valori inseriti: consumo in kWh e prezzo in €/kWh.</div>
+    </div>
+
+    <button class="onb-btn" id="onb-go">Avvia la simulazione →</button>
+    <button class="onb-skip" id="onb-demo">oppure prova con valori di esempio</button>
+  </div>
+</div>
+
+<!-- ===== LOADER ===== -->
+<div class="loader hidden" id="loader">
+  <div class="loader-ring">
+    <svg viewBox="0 0 64 64">
+      <circle class="track" cx="32" cy="32" r="28"/>
+      <circle class="arc" cx="32" cy="32" r="28"/>
+    </svg>
+    <div class="loader-sun">☀</div>
+  </div>
+  <div class="loader-txt" id="loader-txt">Calcolo in corso…</div>
+  <p class="loader-sub">Sto dimensionando l'impianto e stimando produzione, autoconsumo e rientro sui tuoi dati.</p>
+</div>
+
+<div class="wrap" id="app" style="display:none">
+  <header>
+    <div class="eyebrow">Simulatore investimento fotovoltaico</div>
+    <h1>Il tuo fotovoltaico<br><span class="accent">conviene davvero?</span></h1>
+    <p class="sub">Muovi i parametri dei preventivi che raccogli e vedi in tempo reale come cambiano risparmio annuo, tempo di rientro e rendimento. La stima parte dai dati della tua bolletta.</p>
+    <div class="badge-row">
+      <div class="badge">Consumo <b><span id="b-need">4.500</span> kWh/anno</b></div>
+      <div class="badge">Spesa attuale <b>~<span id="b-spend">1.305</span> €/anno</b></div>
+      <div class="badge">Prezzo rete <b><span id="b-price">0,29</span> €/kWh</b></div>
+      <button class="badge-edit" id="b-reset">↺ Cambia i miei dati</button>
+    </div>
+  </header>
+
+  <div class="grid-main">
+    <div class="panel">
+      <h2><span class="dot"></span>Parametri del preventivo</h2>
+
+      <div class="ctrl">
+        <div class="ctrl-head"><span class="ctrl-label">Costo impianto</span><span class="ctrl-val" id="v-cost">11.500 <small>€</small></span></div>
+        <input type="range" id="cost" min="4000" max="30000" step="250" value="11500">
+        <div class="ctrl-hint">Prezzo chiavi in mano del preventivo (IVA 10% inclusa).</div>
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-head"><span class="ctrl-label">Potenza impianto</span><span class="ctrl-val" id="v-kwp">5,0 <small>kWp</small></span></div>
+        <input type="range" id="kwp" min="1.5" max="12" step="0.5" value="5">
+        <div class="ctrl-hint">In Italia ~1.200–1.400 kWh prodotti per kWp all'anno (qui: <span id="h-prodkwp">1.300</span>).</div>
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-head"><span class="ctrl-label">Accumulo (batteria)</span><span class="ctrl-val" id="v-batt">9 <small>kWh</small></span></div>
+        <input type="range" id="batt" min="0" max="20" step="1" value="9">
+        <div class="ctrl-hint">0 = solo pannelli. La batteria sposta l'autoconsumo verso sera/notte.</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="ctrl">
+        <div class="ctrl-head"><span class="ctrl-label">Fabbisogno annuo</span><span class="ctrl-val" id="v-need">4.500 <small>kWh</small></span></div>
+        <input type="range" id="need" min="1500" max="15000" step="100" value="4500">
+        <div class="ctrl-hint">Il tuo consumo. Sale se aggiungi pompa di calore o auto elettrica.</div>
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-head"><span class="ctrl-label">Spostamento carichi di giorno</span><span class="ctrl-val" id="v-shift">Medio</span></div>
+        <input type="range" id="shift" min="0" max="2" step="1" value="1">
+        <div class="ctrl-hint">Quanto sposti lavatrice, clima, elettrodomestici nelle ore di sole.</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="ctrl">
+        <div class="ctrl-head"><span class="ctrl-label">Prezzo energia (rete)</span><span class="ctrl-val" id="v-price">0,29 <small>€/kWh</small></span></div>
+        <input type="range" id="price" min="0.10" max="0.60" step="0.01" value="0.29">
+        <div class="ctrl-hint">Prezzo medio tutto compreso che paghi oggi in bolletta.</div>
+      </div>
+
+      <div class="ctrl">
+        <div class="ctrl-head"><span class="ctrl-label">Detrazione fiscale</span><span class="ctrl-val" id="v-detr">50 <small>%</small></span></div>
+        <div class="toggle-row" id="detr-toggle">
+          <button data-d="0.50" class="on">50% prima casa</button>
+          <button data-d="0.36">36% altra</button>
+          <button data-d="0">Nessuna</button>
+        </div>
+        <div class="ctrl-hint">Recuperata in 10 anni in dichiarazione (serve capienza IRPEF).</div>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2><span class="dot"></span>Risultato economico</h2>
+        <div class="kpi-grid">
+          <div class="kpi hero-kpi">
+            <div class="kpi-k">Tempo di rientro (costo netto)</div>
+            <div class="kpi-v" id="r-payback">4,0 <small>anni</small></div>
+            <div class="kpi-sub" id="r-payback-cash">In cassa reale (detrazione diluita): ~6 anni</div>
+            <span class="verdict-pill" id="r-verdict">Ottimo investimento</span>
+          </div>
+          <div class="kpi plain">
+            <div class="kpi-k">Risparmio annuo</div>
+            <div class="kpi-v" id="r-saving">1.450 <small>€</small></div>
+            <div class="kpi-note" id="r-saving-note">Bolletta evitata + energia immessa</div>
+          </div>
+          <div class="kpi plain">
+            <div class="kpi-k">Costo netto</div>
+            <div class="kpi-v" id="r-net">5.750 <small>€</small></div>
+            <div class="kpi-note" id="r-net-note">Dopo detrazione 50%</div>
+          </div>
+          <div class="kpi plain">
+            <div class="kpi-k">Autoconsumo stimato</div>
+            <div class="kpi-v" id="r-self">72 <small>%</small></div>
+            <div class="kpi-note">Quota di produzione usata in casa</div>
+          </div>
+          <div class="kpi plain">
+            <div class="kpi-k">Guadagno netto a 25 anni</div>
+            <div class="kpi-v" id="r-25">30k <small>€</small></div>
+            <div class="kpi-note">Somma risparmi meno investimento</div>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="chart-head">
+            <span class="chart-title">Flusso di cassa cumulato nel tempo</span>
+            <div class="legend">
+              <span><i style="background:var(--lime)"></i>Saldo cumulato</span>
+              <span><i style="background:var(--green)"></i>Pareggio</span>
+            </div>
+          </div>
+          <svg id="chart" viewBox="0 0 720 260"></svg>
+        </div>
+      </div>
+
+      <div class="panel season">
+        <h2><span class="dot"></span>Autoconsumo mese per mese</h2>
+        <div class="chart-head">
+          <div class="legend">
+            <span><i style="background:var(--lime)"></i>Coperto dal fotovoltaico</span>
+            <span><i style="background:var(--grid-red)"></i>Comprato dalla rete</span>
+          </div>
+        </div>
+        <div class="season-bars" id="season"></div>
+        <div class="season-note" id="season-note">
+          D'inverno il sole produce meno e i consumi di casa salgono: l'autoconsumo cala e compri di più dalla rete. Chiedi ai fornitori la simulazione mensile, non solo la media annua.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="foot">
+    <b>Stima indicativa, non un preventivo.</b> Il modello usa i dati che hai inserito e ipotesi di mercato tipiche per l'Italia. I valori reali dipendono da zona e irraggiamento, esposizione del tetto, ombreggiamenti, rendimento della batteria e prezzi futuri dell'energia. La detrazione 50% richiede prima casa e capienza IRPEF; verifica l'aliquota in vigore nell'anno dei lavori.
+  </p>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (n,d=0) => n.toLocaleString('it-IT',{minimumFractionDigits:d,maximumFractionDigits:d});
+
+const state = { cost:11500, kwp:5, batt:9, need:4500, shift:1, price:0.29, detr:0.50 };
+
+const RESALE = 0.10;
+const PROD_PER_KWP = 1300;
+const YEARS = 25;
+const DEGRADE = 0.005;
+const PRICE_INFL = 0.02;
+
+const prodShape = [0.045,0.058,0.083,0.098,0.112,0.118,0.122,0.110,0.090,0.068,0.048,0.048];
+const mesi = ['Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+
+function clamp(v,min,max){return Math.max(min,Math.min(max,v));}
+
+// Imposta tutti i valori di partenza derivandoli dai due dati inseriti
+function initFromInputs(need, price){
+  state.need = need;
+  state.price = price;
+  // Impianto suggerito: copre ~la produzione annua del fabbisogno, cap ragionevole.
+  // kWp ≈ fabbisogno / produzione-per-kWp, arrotondato a 0,5.
+  let kwp = Math.round((need / PROD_PER_KWP) * 2) / 2;
+  state.kwp = clamp(kwp, 1.5, 12);
+  // Accumulo suggerito: ~1,8 kWh per kWp, arrotondato, cap 20.
+  state.batt = clamp(Math.round(state.kwp * 1.8), 0, 20);
+  // Costo chiavi in mano suggerito: ~1.600 €/kWp pannelli + ~450 €/kWh batteria.
+  let cost = state.kwp*1600 + state.batt*450;
+  state.cost = clamp(Math.round(cost/250)*250, 4000, 30000);
+  state.shift = 1;
+  state.detr = 0.50;
+
+  // sincronizza gli slider con i valori calcolati
+  $('cost').value = state.cost;
+  $('kwp').value  = state.kwp;
+  $('batt').value = state.batt;
+  $('need').value = state.need;
+  $('price').value= state.price;
+  $('shift').value= state.shift;
+  document.querySelectorAll('#detr-toggle button').forEach(x=>x.classList.toggle('on', +x.dataset.d===state.detr));
+
+  // etichette slider
+  $('v-cost').innerHTML = fmt(state.cost)+' <small>€</small>';
+  $('v-kwp').innerHTML  = fmt(state.kwp,1)+' <small>kWp</small>';
+  $('v-batt').innerHTML = state.batt+' <small>kWh</small>';
+  $('v-need').innerHTML = fmt(state.need)+' <small>kWh</small>';
+  $('v-price').innerHTML= fmt(state.price,2)+' <small>€/kWh</small>';
+  $('v-shift').textContent = shiftLabels[state.shift];
+  $('v-detr').innerHTML = Math.round(state.detr*100)+' <small>%</small>';
+  ['cost','kwp','batt','need','price','shift'].forEach(id=>setPct($(id)));
+
+  // badge intestazione
+  $('b-need').textContent  = fmt(state.need);
+  $('b-price').textContent = fmt(state.price,2);
+  $('b-spend').textContent = fmt(state.need*state.price);
+  $('h-prodkwp').textContent = fmt(PROD_PER_KWP);
+
+  render();
+}
+
+function selfConsumptionRate(){
+  let base = 0.32;
+  base += Math.min(state.batt,12) * 0.028;
+  base += state.shift * 0.06;
+  return Math.max(0.30, Math.min(0.82, base));
+}
+
+function compute(){
+  const prod = state.kwp * PROD_PER_KWP;
+  const self = selfConsumptionRate();
+  const selfKwh = Math.min(prod * self, state.need);
+  const fedKwh = Math.max(0, prod - selfKwh);
+  const savingBill = selfKwh * state.price;
+  const savingResale = fedKwh * RESALE;
+  const annual = savingBill + savingResale;
+  const net = state.cost * (1 - state.detr);
+  return {prod, self, selfKwh, fedKwh, annual, net, savingBill, savingResale};
+}
+
+function cumulativeCashflow(){
+  const {annual} = compute();
+  const detrAnnual = state.cost * state.detr / 10;
+  const pts = [];
+  let bal = -state.cost;
+  pts.push({y:0, bal});
+  for(let y=1;y<=YEARS;y++){
+    const energy = annual * Math.pow(1+PRICE_INFL,y-1) * Math.pow(1-DEGRADE,y-1);
+    const detr = y<=10 ? detrAnnual : 0;
+    bal += energy + detr;
+    pts.push({y, bal});
+  }
+  return pts;
+}
+
+function paybackYear(pts){
+  for(let i=1;i<pts.length;i++){
+    if(pts[i].bal>=0){
+      const p=pts[i-1], c=pts[i];
+      return (p.y + (0-p.bal)/(c.bal-p.bal));
+    }
+  }
+  return null;
+}
+
+function paybackNet(){
+  const {annual,net} = compute();
+  return annual>0 ? net/annual : Infinity;
+}
+
+function render(){
+  const c = compute();
+
+  $('r-saving').innerHTML = fmt(c.annual) + ' <small>€</small>';
+  $('r-saving-note').textContent = `Bolletta evitata ${fmt(c.savingBill)} € + immesso ${fmt(c.savingResale)} €`;
+  $('r-net').innerHTML = fmt(c.net) + ' <small>€</small>';
+  $('r-net-note').textContent = state.detr>0 ? `Dopo detrazione ${Math.round(state.detr*100)}%` : 'Nessuna detrazione';
+  $('r-self').innerHTML = Math.round(c.self*100) + ' <small>%</small>';
+
+  const pbNet = paybackNet();
+  $('r-payback').innerHTML = isFinite(pbNet) ? fmt(pbNet,1) + ' <small>anni</small>' : '— <small>anni</small>';
+
+  const pts = cumulativeCashflow();
+  const pbCash = paybackYear(pts);
+  $('r-payback-cash').textContent = pbCash
+    ? `In cassa reale (detrazione diluita): ~${fmt(pbCash,1)} anni`
+    : 'In cassa reale: oltre 25 anni';
+
+  const gain25 = pts[pts.length-1].bal;
+  $('r-25').innerHTML = (gain25>=0?'+':'') + fmt(gain25/1000,1).replace(',0','') + 'k <small>€</small>';
+
+  const v = $('r-verdict');
+  if(pbNet<=5){ v.textContent='Ottimo investimento'; v.style.background='rgba(79,191,139,.14)'; v.style.color='#6FCFA0';}
+  else if(pbNet<=8){ v.textContent='Buon investimento'; v.style.background='rgba(155,203,78,.14)'; v.style.color='#AFD268';}
+  else if(pbNet<=12){ v.textContent='Ritorno lento'; v.style.background='rgba(214,194,78,.12)'; v.style.color='#D6C24E';}
+  else { v.textContent='Poco conveniente'; v.style.background='rgba(198,114,101,.16)'; v.style.color='#D08A7E';}
+
+  drawChart(pts, pbCash);
+  drawSeason(c);
+}
+
+function drawChart(pts, pb){
+  const W=720,H=260,padL=48,padR=16,padT=16,padB=28;
+  const xs=v=>padL+(v/YEARS)*(W-padL-padR);
+  const bals=pts.map(p=>p.bal);
+  const minB=Math.min(...bals,0), maxB=Math.max(...bals,0);
+  const span=(maxB-minB)||1;
+  const ys=v=>padT+(1-(v-minB)/span)*(H-padT-padB);
+
+  let svg='';
+  const steps=4;
+  for(let i=0;i<=steps;i++){
+    const val=minB+span*i/steps;
+    const y=ys(val);
+    svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#28322A" stroke-width="1"/>`;
+    svg+=`<text class="axis-lbl" x="${padL-8}" y="${y+3}" text-anchor="end">${fmt(val/1000,0)}k</text>`;
+  }
+  svg+=`<line class="zero-line" x1="${padL}" y1="${ys(0)}" x2="${W-padR}" y2="${ys(0)}"/>`;
+  [0,5,10,15,20,25].forEach(y=>{
+    svg+=`<text class="axis-lbl" x="${xs(y)}" y="${H-8}" text-anchor="middle">${y}${y===0?'':' a'}</text>`;
+  });
+
+  let dLine='';
+  pts.forEach((p,i)=>{ dLine+=(i===0?'M':'L')+xs(p.y)+' '+ys(p.bal)+' '; });
+  let dArea=`M${xs(0)} ${ys(0)} `;
+  pts.forEach(p=>{ dArea+='L'+xs(p.y)+' '+ys(p.bal)+' '; });
+  dArea+=`L${xs(YEARS)} ${ys(0)} Z`;
+
+  svg+=`<defs>
+    <linearGradient id="fillG" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(155,203,78,.16)"/>
+      <stop offset="100%" stop-color="rgba(155,203,78,.01)"/>
+    </linearGradient>
+    <linearGradient id="lineG" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#C67265"/>
+      <stop offset="${pb?(pb/YEARS*100):50}%" stop-color="#D6C24E"/>
+      <stop offset="100%" stop-color="#9BCB4E"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>`;
+  svg+=`<path d="${dArea}" fill="url(#fillG)"/>`;
+  svg+=`<path class="cash-line" d="${dLine}" stroke="url(#lineG)"/>`;
+
+  if(pb){
+    const px=xs(pb), py=ys(0);
+    svg+=`<line x1="${px}" y1="${padT}" x2="${px}" y2="${H-padB}" stroke="#4FBF8B" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.55"/>`;
+    svg+=`<circle class="pb-marker" cx="${px}" cy="${py}" r="5"/>`;
+    svg+=`<circle cx="${px}" cy="${py}" r="5" fill="none" stroke="#161C17" stroke-width="2"/>`;
+    svg+=`<text x="${px}" y="${padT-2}" text-anchor="middle" font-size="11" font-weight="700" fill="#4FBF8B">Pareggio ${fmt(pb,1)}a</text>`;
+  }
+
+  $('chart').innerHTML=svg;
+}
+
+function drawSeason(c){
+  const winterBump=[1.3,1.2,1.0,0.85,0.8,0.85,0.9,0.9,0.8,0.9,1.1,1.3];
+  const bumpSum=winterBump.reduce((a,b)=>a+b,0);
+  const monthlyNeed = winterBump.map(w=> state.need*w/bumpSum);
+  const prod=c.prod;
+  const monthlyProd = prodShape.map(s=> prod*s);
+
+  let html='';
+  let noteWorst=0, worstVal=1;
+  monthlyNeed.forEach((need,i)=>{
+    const availSelf = Math.min(monthlyProd[i]*c.self, need);
+    const selfPct = need>0 ? availSelf/need : 0;
+    const gridPct = 1-selfPct;
+    if(selfPct<worstVal){worstVal=selfPct;noteWorst=i;}
+    const selfH=Math.round(selfPct*100), gridH=Math.round(gridPct*100);
+    html+=`<div class="month">
+      <div class="bar-stack" title="${mesi[i]}: ${Math.round(selfPct*100)}% da FV">
+        <div class="bar-grid" style="height:${gridH}%"></div>
+        <div class="bar-self" style="height:${selfH}%"></div>
+      </div>
+      <div class="m-lbl">${mesi[i][0]}</div>
+    </div>`;
+  });
+  $('season').innerHTML=html;
+
+  const worstMonth=mesi[noteWorst];
+  $('season-note').innerHTML = `Mese più critico: <b style="color:var(--lime)">${worstMonth}</b> — solo ~${Math.round(worstVal*100)}% del fabbisogno coperto dal sole. D'inverno il fotovoltaico produce meno proprio quando i consumi salgono. Chiedi ai fornitori la simulazione <b style="color:var(--lime)">mensile</b>, non solo la media annua.`;
+}
+
+function setPct(el){
+  const min=+el.min,max=+el.max,val=+el.value;
+  el.style.setProperty('--pct',((val-min)/(max-min)*100)+'%');
+}
+
+const shiftLabels=['Poco','Medio','Molto'];
+
+function bind(id,key,fmtFn){
+  const el=$(id);
+  setPct(el);
+  el.addEventListener('input',()=>{
+    state[key]=+el.value;
+    setPct(el);
+    fmtFn();
+    render();
+  });
+}
+
+bind('cost','cost',()=>$('v-cost').innerHTML=fmt(state.cost)+' <small>€</small>');
+bind('kwp','kwp',()=>$('v-kwp').innerHTML=fmt(state.kwp,1)+' <small>kWp</small>');
+bind('batt','batt',()=>$('v-batt').innerHTML=state.batt+' <small>kWh</small>');
+bind('need','need',()=>{$('v-need').innerHTML=fmt(state.need)+' <small>kWh</small>';$('b-need').textContent=fmt(state.need);$('b-spend').textContent=fmt(state.need*state.price);});
+bind('shift','shift',()=>$('v-shift').textContent=shiftLabels[state.shift]);
+bind('price','price',()=>{$('v-price').innerHTML=fmt(state.price,2)+' <small>€/kWh</small>';$('b-price').textContent=fmt(state.price,2);$('b-spend').textContent=fmt(state.need*state.price);});
+
+document.querySelectorAll('#detr-toggle button').forEach(b=>{
+  b.addEventListener('click',()=>{
+    document.querySelectorAll('#detr-toggle button').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    state.detr=+b.dataset.d;
+    $('v-detr').innerHTML=Math.round(state.detr*100)+' <small>%</small>';
+    render();
+  });
+});
+
+// ===== ONBOARDING FLOW =====
+function parseNum(v){ return parseFloat(String(v).replace(',','.')); }
+
+const loaderSteps=['Dimensiono l\'impianto…','Stimo produzione e autoconsumo…','Calcolo risparmio e rientro…'];
+
+function startApp(need, price){
+  $('overlay').classList.add('hidden');
+  // loader di 3 secondi
+  const loader=$('loader');
+  loader.classList.remove('hidden');
+  // riavvia l'animazione dell'arco
+  const arc=loader.querySelector('.arc');
+  arc.style.animation='none'; void arc.offsetWidth; arc.style.animation='';
+  let i=0; $('loader-txt').textContent=loaderSteps[0];
+  const stepTimer=setInterval(()=>{ i=(i+1)%loaderSteps.length; $('loader-txt').textContent=loaderSteps[i]; },1000);
+  setTimeout(()=>{
+    clearInterval(stepTimer);
+    loader.classList.add('hidden');
+    $('app').style.display='';
+    initFromInputs(need, price);
+  },3000);
+}
+
+$('onb-go').addEventListener('click', ()=>{
+  const need = parseNum($('in-need').value);
+  const price = parseNum($('in-price').value);
+  const ok = need>=500 && need<=30000 && price>=0.05 && price<=1 && isFinite(need) && isFinite(price);
+  if(!ok){ $('onb-err').classList.add('show'); return; }
+  $('onb-err').classList.remove('show');
+  startApp(Math.round(need), Math.round(price*100)/100);
+});
+
+$('onb-demo').addEventListener('click', ()=> startApp(4500, 0.29));
+
+// invio da tastiera per avanzare
+['in-need','in-price'].forEach(id=>{
+  $(id).addEventListener('keydown', e=>{ if(e.key==='Enter') $('onb-go').click(); });
+});
+
+// torna all'onboarding
+$('b-reset').addEventListener('click', ()=>{
+  $('app').style.display='none';
+  $('overlay').classList.remove('hidden');
+  $('in-need').value = state.need;
+  $('in-price').value = fmt(state.price,2);
+  $('in-need').focus();
+});
+
+$('in-need').focus();
+</script>
+</body>
+</html>
