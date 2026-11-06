@@ -199,7 +199,7 @@
   /* ===== ONBOARDING OVERLAY ===== */
   .overlay{
     position:fixed;inset:0;z-index:50;
-    display:flex;align-items:center;justify-content:center;
+    display:flex;justify-content:center;overflow-y:auto;
     padding:clamp(14px,4vw,40px);
     background:
       radial-gradient(800px 500px at 50% -10%, rgba(155,203,78,.05), transparent 60%),
@@ -208,13 +208,33 @@
   }
   .overlay.hidden{display:none}
   .onb{
-    width:100%;max-width:460px;
+    width:100%;max-width:940px;margin:auto;
     background:linear-gradient(180deg,var(--panel) 0%,var(--panel-2) 100%);
     border:1px solid var(--line-2);border-radius:18px;
-    padding:clamp(24px,4vw,34px);
+    padding:clamp(16px,2.6vw,22px);
     box-shadow:0 40px 80px -30px rgba(0,0,0,.9);
     position:relative;
+    display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:clamp(18px,3vw,34px);
   }
+  .onb-form{padding:clamp(8px,1.6vw,14px) clamp(4px,1vw,10px) clamp(8px,1.6vw,14px) 0}
+  @media(max-width:820px){
+    .onb{grid-template-columns:1fr;max-width:480px}
+    .onb-scene{min-height:0;height:240px}
+    .onb-form{padding:4px 6px 8px}
+  }
+
+  /* ===== SCENA CASA ===== */
+  .onb-scene{
+    position:relative;min-height:360px;border-radius:13px;overflow:hidden;
+    border:1px solid var(--line);
+    background:
+      radial-gradient(380px 260px at 18% 4%, rgba(214,194,78,.10), transparent 62%),
+      linear-gradient(180deg,#141B16 0%,#0E130F 100%);
+  }
+  .onb-scene svg{position:absolute;inset:0;width:100%;height:100%;overflow:hidden}
+  .sc-lbl{font-family:var(--mono);font-size:8px;letter-spacing:.1em;fill:var(--muted);font-weight:600}
+  .sc-val{font-family:var(--mono);font-size:13px;font-weight:700;fill:var(--ink)}
+  .sc-pill{font-family:var(--mono);font-size:7.5px;font-weight:700;fill:var(--lime)}
   .onb .eyebrow{margin-bottom:14px}
   .onb h1{font-size:clamp(23px,5vw,30px);margin-bottom:10px}
   .onb .sub{margin-top:0;margin-bottom:26px;font-size:14px}
@@ -293,6 +313,10 @@
 <!-- ===== ONBOARDING ===== -->
 <div class="overlay" id="overlay">
   <div class="onb">
+    <div class="onb-scene" aria-hidden="true">
+      <svg id="scene" viewBox="-200 -250 420 440" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="onb-form">
     <div class="eyebrow">Configura la simulazione</div>
     <h1>Il tuo fotovoltaico<br><span class="accent">conviene davvero?</span></h1>
     <p class="sub">Inserisci due dati dalla tua bolletta elettrica. Da lì costruisco una prima stima, che poi potrai affinare muovendo tutti i parametri.</p>
@@ -318,6 +342,7 @@
 
     <button class="onb-btn" id="onb-go">Avvia la simulazione →</button>
     <button class="onb-skip" id="onb-demo">oppure prova con valori di esempio</button>
+    </div>
   </div>
 </div>
 
@@ -725,6 +750,210 @@ document.querySelectorAll('#detr-toggle button').forEach(b=>{
   });
 });
 
+// ===== SCENA 3D: CASA + PANNELLI + BATTERIA =====
+const Scene = (()=>{
+  const S=30, C=Math.cos(Math.PI/6);
+  const iso=(x,y,z)=>[(x-y)*C*S, (x+y)*0.5*S - z*S];
+  const pt=p=>iso(...p).map(n=>n.toFixed(1)).join(',');
+  const pts=a=>a.map(pt).join(' ');
+  const poly=(a,attrs)=>`<polygon points="${pts(a)}" ${attrs}/>`;
+  const line=(a,b,attrs)=>{const [x1,y1]=iso(...a),[x2,y2]=iso(...b);return `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" ${attrs}/>`;};
+
+  // geometria casa
+  const W=4, D=3, H=2.2, R=3.8, OV=0.15, EY=D+0.2;
+  const slope=(R-H)/(D/2);              // pendenza falda
+  const EZ=H-0.2*slope;                 // quota gronda (con sbalzo)
+  const RT=0.12;                        // spessore falda
+  const onSlope=(x,t)=>[x, D/2+(EY-D/2)*t, R-(R-EZ)*t]; // punto sulla falda frontale (t: 0 colmo → 1 gronda)
+
+  // pannelli 4×2
+  const panels=[]; const PX0=0.35, PX1=3.65, PT0=0.13, PT1=0.87, GX=0.08, GT=0.05;
+  const pw=(PX1-PX0-GX*3)/4, ph=(PT1-PT0-GT)/2;
+  for(let j=0;j<2;j++) for(let i=0;i<4;i++){
+    const x0=PX0+i*(pw+GX), x1=x0+pw, t0=PT0+j*(ph+GT), t1=t0+ph;
+    panels.push({x0,x1,t0,t1});
+  }
+  const panelQuad=p=>[onSlope(p.x0,p.t0),onSlope(p.x1,p.t0),onSlope(p.x1,p.t1),onSlope(p.x0,p.t1)];
+
+  // batteria sulla parete laterale
+  const BY0=0.42, BY1=1.38, BZ0=0.18, BZ1=1.72, BX=W+0.24;
+  const LY0=0.74, LY1=1.06, LZ0=0.38, LZ1=1.52;
+
+  // percorso dell'energia: pannelli → gronda → angolo → parete → batteria
+  const path3=[[3.3,2.98,2.24],[3.3,3.16,2.03],[4.06,3.16,2.03],[4.06,2.9,1.93],[4.04,0.9,1.93],[4.14,0.9,BZ1+0.02]];
+  const path2=path3.map(p=>iso(...p));
+  const pathD='M'+path2.map(p=>p.map(n=>n.toFixed(1)).join(' ')).join(' L');
+
+  const SUN=[-150,-200];
+
+  function build(svg){
+    const hc=iso(W/2,D/2,0);
+    let g='';
+    g+=`<defs>
+      <radialGradient id="sc-sun"><stop offset="0" stop-color="#E4D57A" stop-opacity=".55"/><stop offset=".25" stop-color="#D6C24E" stop-opacity=".18"/><stop offset="1" stop-color="#D6C24E" stop-opacity="0"/></radialGradient>
+      <radialGradient id="sc-bat"><stop offset="0" stop-color="#9BCB4E" stop-opacity=".55"/><stop offset="1" stop-color="#9BCB4E" stop-opacity="0"/></radialGradient>
+      <radialGradient id="sc-warm"><stop offset="0" stop-color="#E2B96A" stop-opacity=".35"/><stop offset="1" stop-color="#E2B96A" stop-opacity="0"/></radialGradient>
+      <linearGradient id="sc-glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F0CF86"/><stop offset=".55" stop-color="#D9A75A"/><stop offset="1" stop-color="#A9743A"/></linearGradient>
+      <linearGradient id="sc-panel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22343E"/><stop offset="1" stop-color="#121D24"/></linearGradient>
+      <linearGradient id="sc-levelg" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#4FBF8B"/><stop offset="1" stop-color="#B9DE6E"/></linearGradient>
+      <radialGradient id="sc-fade" cx="${hc[0]}" cy="${hc[1]}" r="190" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".55" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+      <mask id="sc-gmask"><rect x="-260" y="-300" width="560" height="560" fill="url(#sc-fade)"/></mask>
+      <filter id="sc-blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="8"/></filter>
+      <filter id="sc-soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+      <filter id="sc-glow" x="-200%" y="-200%" width="500%" height="500%"><feGaussianBlur stdDeviation="2.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      <clipPath id="sc-pclip">${panels.map(p=>poly(panelQuad(p),'')).join('')}</clipPath>
+    </defs>`;
+
+    // sole
+    g+=`<circle cx="${SUN[0]}" cy="${SUN[1]}" r="120" fill="url(#sc-sun)"/>`;
+    g+=`<circle cx="${SUN[0]}" cy="${SUN[1]}" r="11" fill="#E4D57A" opacity=".9"/>`;
+    // raggi verso i pannelli
+    const rayT=[[0.9,0.3],[2.0,0.5],[3.1,0.3]];
+    g+=`<g id="sc-rays" stroke="#D6C24E" stroke-width="1" stroke-dasharray="2 9" stroke-linecap="round" opacity=".45">`;
+    rayT.forEach(([x,t])=>{const [px,py]=iso(...onSlope(x,t));g+=`<line x1="${SUN[0]}" y1="${SUN[1]}" x2="${px.toFixed(1)}" y2="${py.toFixed(1)}"/>`;});
+    g+=`</g>`;
+
+    // griglia del terreno (isometrica, sfumata)
+    g+=`<g mask="url(#sc-gmask)" stroke="#33423A" stroke-width=".7">`;
+    for(let x=-3;x<=7;x++) g+=line([x,-3,0],[x,6,0],'');
+    for(let y=-3;y<=6;y++) g+=line([-3,y,0],[7,y,0],'');
+    g+=`</g>`;
+
+    // ombra a terra
+    g+=poly([[0,0,0],[W+1.6,0,0],[W+1.6,D,0],[0,D,0]],'fill="#000" opacity=".45" filter="url(#sc-blur)"');
+    // luce della finestra sul terreno
+    const wg=iso(1.4,D+0.9,0);
+    g+=`<ellipse cx="${wg[0].toFixed(1)}" cy="${wg[1].toFixed(1)}" rx="70" ry="24" fill="url(#sc-warm)"/>`;
+    // bagliore verde della batteria sul terreno
+    const bg=iso(W+0.7,1.0,0);
+    g+=`<ellipse id="sc-batglow" cx="${bg[0].toFixed(1)}" cy="${bg[1].toFixed(1)}" rx="66" ry="23" fill="url(#sc-bat)"/>`;
+
+    // palo della rete
+    const pb=[-1.7,4.4,0], pt_=[-1.7,4.4,4.0];
+    g+=line(pb,pt_,'stroke="#3A473E" stroke-width="2.2" stroke-linecap="round"');
+    g+=line([-1.7,4.0,3.7],[-1.7,4.8,3.7],'stroke="#3A473E" stroke-width="1.6" stroke-linecap="round"');
+    { const [ax,ay]=iso(-1.7,4.0,3.7), [bx,by]=iso(0,D,2.05); g+=`<path d="M${ax.toFixed(1)} ${ay.toFixed(1)} Q ${((ax+bx)/2).toFixed(1)} ${((ay+by)/2+16).toFixed(1)} ${bx.toFixed(1)} ${by.toFixed(1)}" fill="none" stroke="#2F3B33" stroke-width=".9"/>`; }
+
+    // pareti
+    g+=poly([[0,D,0],[W,D,0],[W,D,H],[0,D,H]],'fill="#2C352E"');
+    g+=poly([[W,D,0],[W,0,0],[W,0,H],[W,D/2,R],[W,D,H]],'fill="#1F2621"');
+    g+=line([W,D,0],[W,D,H],'stroke="#3A463D" stroke-width=".8"');
+    // luce verde riflessa sulla parete
+    const wl=iso(W,0.9,1.0);
+    g+=`<ellipse id="sc-wallglow" cx="${wl[0].toFixed(1)}" cy="${wl[1].toFixed(1)}" rx="34" ry="52" fill="#9BCB4E" opacity=".14" filter="url(#sc-blur)"/>`;
+
+    // finestra calda
+    const win=[[0.5,D,0.35],[2.3,D,0.35],[2.3,D,1.75],[0.5,D,1.75]];
+    g+=poly(win,'fill="#E2B96A" opacity=".45" filter="url(#sc-blur)"');
+    g+=poly(win,'fill="url(#sc-glass)" stroke="#161B17" stroke-width="2"');
+    g+=line([1.4,D,0.35],[1.4,D,1.75],'stroke="#161B17" stroke-width="1.6"');
+    g+=line([0.5,D,1.05],[2.3,D,1.05],'stroke="#161B17" stroke-width="1" opacity=".6"');
+    // porta
+    g+=poly([[2.85,D,0],[3.5,D,0],[3.5,D,1.55],[2.85,D,1.55]],'fill="#181E1A" stroke="#11160F" stroke-width="1"');
+    { const [hx,hy]=iso(3.38,D,0.78); g+=`<circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="1.2" fill="#8A9A8C"/>`; }
+
+    // falda posteriore (bordo) e falda frontale
+    g+=poly([[W+OV,D/2,R],[W+OV,-0.2,EZ],[W+OV,-0.2,EZ-RT],[W+OV,D/2,R-RT]],'fill="#151A16"');
+    g+=poly([[-OV,D/2,R],[W+OV,D/2,R],[W+OV,EY,EZ],[-OV,EY,EZ]],'fill="#283029"');
+    g+=poly([[W+OV,D/2,R],[W+OV,EY,EZ],[W+OV,EY,EZ-RT],[W+OV,D/2,R-RT]],'fill="#161B17"');
+    g+=poly([[-OV,EY,EZ],[W+OV,EY,EZ],[W+OV,EY,EZ-RT],[-OV,EY,EZ-RT]],'fill="#1C221D"');
+    g+=line([-OV,D/2,R],[W+OV,D/2,R],'stroke="#3B473E" stroke-width="1.4" stroke-linecap="round"');
+
+    // pannelli
+    panels.forEach(p=>{
+      g+=poly(panelQuad(p),'fill="url(#sc-panel)" stroke="#3E5764" stroke-width=".7"');
+      for(let k=1;k<3;k++){const x=p.x0+(p.x1-p.x0)*k/3; g+=line(onSlope(x,p.t0),onSlope(x,p.t1),'stroke="#2A3D48" stroke-width=".5"');}
+      const tm=(p.t0+p.t1)/2; g+=line(onSlope(p.x0,tm),onSlope(p.x1,tm),'stroke="#2A3D48" stroke-width=".5"');
+    });
+    // velo di energia + riflesso che scorre
+    g+=`<g clip-path="url(#sc-pclip)"><rect id="sc-pglow" x="-200" y="-250" width="420" height="440" fill="#9BCB4E" opacity=".08"/><polygon id="sc-shine" fill="#E6F2D6" opacity=".16"/></g>`;
+
+    // batteria
+    g+=poly([[W,BY0,BZ1],[BX,BY0,BZ1],[BX,BY1,BZ1],[W,BY1,BZ1]],'fill="#39443B"');
+    g+=poly([[W,BY1,BZ0],[BX,BY1,BZ0],[BX,BY1,BZ1],[W,BY1,BZ1]],'fill="#2B342D"');
+    g+=poly([[BX,BY1,BZ0],[BX,BY0,BZ0],[BX,BY0,BZ1],[BX,BY1,BZ1]],'fill="#222A24" stroke="#38463C" stroke-width=".7"');
+    g+=poly([[BX,LY1,LZ0],[BX,LY0,LZ0],[BX,LY0,LZ1],[BX,LY1,LZ1]],'fill="#151B16"');
+    g+=`<polygon id="sc-level" fill="url(#sc-levelg)" filter="url(#sc-glow)"/>`;
+
+    // condotto e particelle di energia
+    const tube=(attrs)=>`<path d="${pathD}" fill="none" stroke-linejoin="round" stroke-linecap="round" ${attrs}/>`;
+    g+=tube('id="sc-halo" stroke="#9BCB4E" stroke-width="9" opacity=".16" filter="url(#sc-soft)"');   // alone del tubo
+    g+=tube('stroke="#3B4B40" stroke-width="5.6"');                                                   // bordo del vetro
+    g+=tube('stroke="#142019" stroke-width="4"');                                                     // interno del tubo
+    g+=tube('id="sc-core" stroke="#9BCB4E" stroke-width="1.6" opacity=".35"');                        // anima sempre accesa
+    g+=`<g id="sc-flow" filter="url(#sc-glow)">`;
+    g+=tube('class="sc-pulse" stroke="#9BCB4E" stroke-width="3.4" stroke-dasharray="16 30" opacity=".85"'); // impulsi di energia
+    g+=tube('class="sc-pulse" stroke="#E6F5C4" stroke-width="1.4" stroke-dasharray="16 30"');               // cuore chiaro degli impulsi
+    g+=`</g>`;
+    g+=tube('stroke="#E6F2D6" stroke-width=".8" opacity=".18" transform="translate(-.9 -1.1)"');     // riflesso del vetro
+
+    // etichette
+    const chip=(x,y,w,label,valId,pill)=>{
+      let s=`<g transform="translate(${x} ${y})"><rect width="${w}" height="${pill?50:40}" rx="8" fill="#0F1511" fill-opacity=".85" stroke="#2C3830"/>`;
+      s+=`<text class="sc-lbl" x="10" y="15">${label}</text><text class="sc-val" id="${valId}" x="10" y="31">—</text>`;
+      if(pill) s+=`<rect x="10" y="37" width="${w-20}" height="9" rx="4.5" fill="#9BCB4E" fill-opacity=".14"/><circle cx="16" cy="41.5" r="1.8" fill="#9BCB4E" id="sc-dot"/><text class="sc-pill" id="sc-state" x="21" y="44.2">IN CARICA</text>`;
+      return s+`</g>`;
+    };
+    g+=chip(124,-34,84,'BATTERIA','sc-batt',true);
+    { const [bx,by]=iso(BX,BY0,1.1); g+=`<path d="M124 -9 L${(bx+4).toFixed(1)} ${by.toFixed(1)}" stroke="#2C3830" stroke-width=".8" stroke-dasharray="2 3" fill="none"/>`; }
+
+    svg.innerHTML=g;
+  }
+
+  let svg, raf=null, t0=0, els={};
+  const ease=x=>x<.5?2*x*x:1-Math.pow(-2*x+2,2)/2;
+  const CYCLE=10.5, CHARGE=9;
+
+  function draw(t){
+    // batteria
+    const ph=t%CYCLE, charging=ph<CHARGE;
+    const lvl=charging?0.22+0.78*ease(ph/CHARGE):1;
+    const z1=LZ0+(LZ1-LZ0)*lvl;
+    els.level.setAttribute('points',pts([[BX,LY1,LZ0],[BX,LY0,LZ0],[BX,LY0,z1],[BX,LY1,z1]]));
+    els.batt.textContent=Math.round(lvl*100)+'%';
+    els.state.textContent=charging?'IN CARICA':'CARICA';
+    els.dot.setAttribute('opacity',charging?(0.4+0.6*Math.abs(Math.sin(t*3))).toFixed(2):'1');
+    // produzione solare
+    // flusso
+    const flow=charging?1:0.25;
+    const off=(-t*34).toFixed(1);
+    els.pulses.forEach(e=>e.setAttribute('stroke-dashoffset',off));
+    els.flow.setAttribute('opacity',flow.toFixed(2));
+    els.halo.setAttribute('opacity',((0.16+0.07*Math.sin(t*2.4))*(charging?1:0.5)).toFixed(3));
+    els.core.setAttribute('opacity',(charging?0.5:0.2).toFixed(2));
+    // pannelli: pulsazione + riflesso
+    els.pglow.setAttribute('opacity',(0.06+0.07*(0.5+0.5*Math.sin(t*2.1))).toFixed(3));
+    const s=-1.2+((t%4.8)/4.8)*6.4;
+    els.shine.setAttribute('points',pts([onSlope(s,0),onSlope(s+0.45,0),onSlope(s+0.05,1),onSlope(s-0.4,1)]));
+    els.rays.setAttribute('stroke-dashoffset',(-t*18).toFixed(1));
+    // bagliore batteria
+    const gl=0.7+0.3*Math.sin(t*2);
+    els.batglow.setAttribute('opacity',gl.toFixed(2));
+    els.wallglow.setAttribute('opacity',(0.12+0.10*gl).toFixed(3));
+  }
+
+  function loop(now){ draw((now-t0)/1000); raf=requestAnimationFrame(loop); }
+
+  return {
+    init(){
+      svg=document.getElementById('scene'); build(svg);
+      const q=id=>svg.querySelector('#'+id);
+      els={level:q('sc-level'),batt:q('sc-batt'),state:q('sc-state'),dot:q('sc-dot'),
+           flow:q('sc-flow'),pulses:[...svg.querySelectorAll('.sc-pulse')],halo:q('sc-halo'),core:q('sc-core'),pglow:q('sc-pglow'),shine:q('sc-shine'),
+           rays:q('sc-rays'),batglow:q('sc-batglow'),wallglow:q('sc-wallglow')};
+      draw(6);
+    },
+    start(){
+      if(raf) return;
+      let reduce=false; try{reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;}catch(e){}
+      if(reduce){ draw(6); return; }
+      t0=performance.now(); raf=requestAnimationFrame(loop);
+    },
+    stop(){ if(raf){cancelAnimationFrame(raf); raf=null;} }
+  };
+})();
+Scene.init(); Scene.start();
+
 // ===== ONBOARDING FLOW =====
 function parseNum(v){ return parseFloat(String(v).replace(',','.')); }
 
@@ -732,6 +961,7 @@ const loaderSteps=['Dimensiono l\'impianto…','Stimo produzione e autoconsumo�
 
 function startApp(need, price){
   $('overlay').classList.add('hidden');
+  Scene.stop();
   // loader di 3 secondi
   const loader=$('loader');
   loader.classList.remove('hidden');
@@ -768,6 +998,7 @@ $('onb-demo').addEventListener('click', ()=> startApp(4500, 0.29));
 $('b-reset').addEventListener('click', ()=>{
   $('app').style.display='none';
   $('overlay').classList.remove('hidden');
+  Scene.start();
   $('in-need').value = state.need;
   $('in-price').value = fmt(state.price,2);
   $('in-need').focus();
